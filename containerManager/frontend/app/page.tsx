@@ -1,102 +1,66 @@
 "use client";
-import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+import { DashboardHeader } from "@/components/DashboardHeader";
+import { ProjectList } from "@/components/ProjectList";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { useRailwayApi } from "@/hooks/useRailwayApi";
+import { useEffect } from "react";
 
-export default function Home() {
-  const [projects, setProjects] = useState<any[]>([]);
-  const [services, setServices] = useState<any[]>([]);
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+export default function RailwayDashboard() {
+  const {
+    // State
+    projects,
+    services,
+    selectedProject,
+    isLoadingProjects,
+    isLoadingServices,
+    error,
+
+    // Actions
+    fetchProjects,
+    loadServices,
+    handleDeploymentAction,
+    isActionLoading,
+    clearError,
+  } = useRailwayApi();
 
   useEffect(() => {
-    fetch(`${API_URL}/projects`)
-      .then((res) => res.json())
-      .then((data) =>
-        setProjects(data?.data?.projects?.edges.map((edge) => edge.node) || [])
-      );
-  }, []);
+    fetchProjects();
+  }, [fetchProjects]);
 
-  const loadServices = (projectId: string) => {
-    setSelectedProject(projectId);
-    fetch(`${API_URL}/services/${projectId}`)
-      .then((res) => res.json())
-      .then((data) => setServices(data?.data?.project?.services?.edges || []));
-  };
-
-  const handleAction = async (
-    action: "stop" | "restart",
-    projectId: string,
-    deploymentId: string
-  ) => {
-    setLoading(true);
-    await fetch(`${API_URL}/${action}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deploymentId }),
-    });
-    loadServices(projectId);
-    setLoading(false);
-  };
+  if (isLoadingProjects) {
+    return (
+      <main className="p-8">
+        <div className="max-w-6xl mx-auto">
+          <LoadingSpinner
+            size="lg"
+            text="Loading projects..."
+            className="py-12"
+          />
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Railway Projects</h1>
-      <div className="space-y-4">
-        {projects.map((proj: any) => (
-          <div key={proj.id} className="border rounded p-4">
-            <div className="flex justify-between items-center">
-              <span className="font-semibold">{proj.name}</span>
-              <Button onClick={() => loadServices(proj.id)} disabled={loading}>
-                View Services
-              </Button>
-            </div>
-            {selectedProject === proj.id && (
-              <div className="mt-4 space-y-2">
-                {services.length === 0 && <p>No services found.</p>}
-                {services.map((svc: any) => (
-                  <div
-                    key={svc.node.id}
-                    className="flex justify-between items-center border p-2 rounded"
-                  >
-                    <span>{svc.node.name}</span>
-                    <div className="space-x-2">
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          handleAction(
-                            "restart",
-                            proj.id,
-                            svc.node.deployments.edges[0].node.id
-                          )
-                        }
-                        disabled={loading}
-                      >
-                        Restart
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() =>
-                          handleAction(
-                            "stop",
-                            proj.id,
-                            svc.node.deployments.edges[0].node.id
-                          )
-                        }
-                        disabled={loading}
-                      >
-                        Stop
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+    <main className="p-8 max-w-6xl mx-auto">
+      <DashboardHeader projectCount={projects.length} />
+
+      {error && (
+        <ErrorAlert message={error} onDismiss={clearError} className="mb-6" />
+      )}
+
+      <ProjectList
+        projects={projects}
+        services={services}
+        selectedProject={selectedProject}
+        isLoadingServices={isLoadingServices}
+        onLoadServices={loadServices}
+        onRefreshProjects={fetchProjects}
+        onDeploymentAction={handleDeploymentAction}
+        isActionLoading={isActionLoading}
+      />
     </main>
   );
 }
