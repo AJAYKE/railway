@@ -181,4 +181,8 @@ class WebSocketManager:
     
     def get_total_connections(self) -> int:
         """Get total number of connections"""
-        return len(self.connections) 
+        return len(self.connections)
+    
+    def is_connected(self) -> bool:
+        """Check if the WebSocket manager is properly initialized"""
+        return self.redis is not None 

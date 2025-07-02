@@ -95,6 +95,7 @@ class Application:
         await self.initialize()
         app.state.websocket_manager = self.websocket_manager
         app.state.redis = self.redis_client
+        app.state.discord_bot = self.discord_bot
 
         # Start Discord bot
         bot_task = asyncio.create_task(self.discord_bot.start())

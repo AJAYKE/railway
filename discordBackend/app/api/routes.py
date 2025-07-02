@@ -3,7 +3,6 @@ import time
 from datetime import datetime
 from typing import List
 
-import redis.asyncio as redis
 from app.config import Config
 from app.database import db_manager
 from app.logging import get_logger
@@ -24,21 +23,38 @@ async def verify_api_key(request: Request):
 
 
 @router.get("/health", response_model=HealthCheck)
-async def health_check():
-    """Health check endpoint"""
+async def health_check(request: Request):
+    """Health check endpoint that tests all service connections"""
     components = {}
     
-    # Check Redis
+    # Check Redis connection
     try:
-        # This would need to be passed in or accessed globally
-        # For now, we'll mark it as healthy
+        redis_client = request.app.state.redis
+        await redis_client.ping()
         components["redis"] = "healthy"
-    except:
+    except Exception as e:
+        logger.error("Redis health check failed", error=str(e))
         components["redis"] = "unhealthy"
     
     # Check Discord bot
-    # This would need to be passed in or accessed globally
-    components["discord"] = "healthy"
+    try:
+        websocket_manager = request.app.state.websocket_manager
+        # Check if Discord bot is running by checking if it's in the application state
+        if hasattr(request.app.state, 'discord_bot') and request.app.state.discord_bot:
+            bot = request.app.state.discord_bot
+            if bot.is_ready():
+                components["discord"] = "healthy"
+            else:
+                components["discord"] = "connecting"
+        else:
+            # Fallback: check if we can access Discord bot through websocket manager
+            if websocket_manager and websocket_manager.is_connected():
+                components["discord"] = "healthy"
+            else:
+                components["discord"] = "unhealthy"
+    except Exception as e:
+        logger.error("Discord bot health check failed", error=str(e))
+        components["discord"] = "unhealthy"
     
     # Check database
     try:
@@ -46,10 +62,31 @@ async def health_check():
         db.execute("SELECT 1")
         db.close()
         components["database"] = "healthy"
-    except:
+    except Exception as e:
+        logger.error("Database health check failed", error=str(e))
         components["database"] = "unhealthy"
     
-    overall_status = "healthy" if all(status == "healthy" for status in components.values()) else "unhealthy"
+    # Check WebSocket manager
+    try:
+        websocket_manager = request.app.state.websocket_manager
+        if websocket_manager:
+            components["websocket"] = "healthy"
+        else:
+            components["websocket"] = "unhealthy"
+    except Exception as e:
+        logger.error("WebSocket manager health check failed", error=str(e))
+        components["websocket"] = "unhealthy"
+    
+    # Determine overall status
+    critical_components = ["redis", "database"]
+    optional_components = ["discord", "websocket"]
+    
+    critical_healthy = all(components.get(comp) == "healthy" for comp in critical_components)
+    overall_status = "healthy" if critical_healthy else "unhealthy"
+    
+    # Add additional metadata
+    components["version"] = "1.0.0"
+    components["environment"] = Config.ENVIRONMENT
     
     return HealthCheck(
         status=overall_status,

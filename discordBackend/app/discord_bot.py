@@ -145,4 +145,8 @@ class DiscordBot:
     async def close(self):
         """Close the Discord bot"""
         if self.client:
-            await self.client.close() 
+            await self.client.close()
+    
+    def is_ready(self) -> bool:
+        """Check if the Discord bot is ready and connected"""
+        return self.client and self.client.is_ready() 
